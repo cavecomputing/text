@@ -18,6 +18,3 @@ pub const PROJECT_MIME: &str = "application/x-dovetail-project";
 
 /// Folder name under `~/.config/` and `~/.local/share/`.
 pub const CONFIG_DIR_NAME: &str = "dovetail";
-
-/// Folder under `~/Documents/` where new projects are created.
-pub const PROJECTS_DIR_NAME: &str = "Dovetail";

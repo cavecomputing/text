@@ -77,7 +77,7 @@ Rules:
 
 1. In scratch or a `.txt`, paste or write the text, then click the **pen (Rewrite)**.
 2. The text **slides left and becomes v1**, read-only. A copy lands on the right as the **draft**.
-3. A project is created right then, with no save dialog. It goes under `~/Documents/Dovetail/<first few words>/` and can be renamed later.
+3. A project is created right then, with no save dialog. It goes under the app's data folder, `~/.local/share/dovetail/projects/<first few words>/` on Linux (2026-10-18: not in Documents), and can be renamed later. Settings can point new projects elsewhere.
 4. If it came from scratch, scratch is cleared, with undo available. This is the default and easy to change.
 5. Work in the draft. Autosave keeps the work-in-progress across many open/close sessions.
 6. **Commit** whenever the owner decides it's worth a new version. Commits are never automatic. The version number goes up and the draft becomes the new left-hand reference. Condensing is just another round of the same thing.

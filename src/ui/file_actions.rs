@@ -125,7 +125,7 @@ impl App {
     fn save_dialog(&self, title: &str, name: String) -> rfd::AsyncFileDialog {
         let folder = match &self.doc {
             Doc::File { path, .. } => path.parent(),
-            _ => self.paths.projects_dir.parent(),
+            _ => Some(self.paths.documents_dir.as_path()),
         };
         let dialog = rfd::AsyncFileDialog::new()
             .set_title(title)

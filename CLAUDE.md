@@ -96,7 +96,7 @@ Renaming existing code is its own task. Don't fold a rename into an unrelated ch
 ```bash
 cargo run                         # build (debug) and open the app on the scratch space
 cargo run -- notes.txt            # open a .txt file (everything after -- goes to the app)
-cargo run -- ~/Documents/Dovetail/Nyx/Nyx.dovetail     # open a project
+cargo run -- ~/.local/share/dovetail/projects/Nyx/Nyx.dovetail     # open a project
 
 cargo test                        # run every test
 cargo test autosave               # run only tests whose name contains "autosave"

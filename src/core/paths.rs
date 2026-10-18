@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use directories::{BaseDirs, UserDirs};
 
-use crate::brand::{CONFIG_DIR_NAME, PROJECTS_DIR_NAME};
+use crate::brand::CONFIG_DIR_NAME;
 
 /// The folders the app reads and writes.
 #[derive(Debug, Clone, PartialEq)]
@@ -13,8 +13,12 @@ pub struct Paths {
     pub config_dir: PathBuf,
     /// `~/.local/share/<app>`: holds the scratch space.
     pub data_dir: PathBuf,
-    /// `~/Documents/<Projects>`: where new projects go unless settings say otherwise.
+    /// `<data_dir>/projects`: where new projects go unless settings say otherwise. It's in the
+    /// app's own data folder, the XDG place for files an app manages, so projects stay out of
+    /// the Documents folder.
     pub projects_dir: PathBuf,
+    /// `~/Documents`: where save dialogs start when there's no open file to start beside.
+    pub documents_dir: PathBuf,
 }
 
 impl Paths {
@@ -29,19 +33,22 @@ impl Paths {
         let documents = UserDirs::new()
             .and_then(|dirs| dirs.document_dir().map(Path::to_path_buf))
             .unwrap_or_else(|| base.home_dir().join("Documents"));
+        let data_dir = base.data_dir().join(CONFIG_DIR_NAME);
         Paths {
             config_dir: base.config_dir().join(CONFIG_DIR_NAME),
-            data_dir: base.data_dir().join(CONFIG_DIR_NAME),
-            projects_dir: documents.join(PROJECTS_DIR_NAME),
+            projects_dir: data_dir.join(PROJECTS_FOLDER),
+            data_dir,
+            documents_dir: documents,
         }
     }
 
-    /// All three folders inside `root`, for tests and the `<APP>_HOME` override.
+    /// Every folder inside `root`, for tests and the `<APP>_HOME` override.
     pub fn under(root: &Path) -> Paths {
         Paths {
             config_dir: root.join("config"),
             data_dir: root.join("data"),
-            projects_dir: root.join("projects"),
+            projects_dir: root.join("data").join(PROJECTS_FOLDER),
+            documents_dir: root.join("documents"),
         }
     }
 
@@ -49,6 +56,9 @@ impl Paths {
         self.config_dir.join("settings.toml")
     }
 }
+
+/// The folder inside the data folder that holds the projects.
+const PROJECTS_FOLDER: &str = "projects";
 
 /// A path for showing to people, with the home folder written as `~`.
 pub fn display_path(path: &Path) -> String {
@@ -85,7 +95,7 @@ mod tests {
         let paths = Paths::under(Path::new("/tmp/x"));
         assert_eq!(paths.config_dir, Path::new("/tmp/x/config"));
         assert_eq!(paths.data_dir, Path::new("/tmp/x/data"));
-        assert_eq!(paths.projects_dir, Path::new("/tmp/x/projects"));
+        assert_eq!(paths.projects_dir, Path::new("/tmp/x/data/projects"));
         assert_eq!(
             paths.settings_file(),
             Path::new("/tmp/x/config/settings.toml")
@@ -109,7 +119,7 @@ mod tests {
         let paths = Paths::detect();
         assert!(paths.config_dir.ends_with(CONFIG_DIR_NAME));
         assert!(paths.data_dir.ends_with(CONFIG_DIR_NAME));
-        assert!(paths.projects_dir.ends_with(PROJECTS_DIR_NAME));
+        assert_eq!(paths.projects_dir, paths.data_dir.join(PROJECTS_FOLDER));
     }
 
     #[test]
