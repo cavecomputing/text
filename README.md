@@ -35,13 +35,13 @@ Dovetail is built on your own computer from this repository. You need Git and
 bits each OS needs).
 
 ```sh
-git clone https://github.com/cavecomputing/text.git
-cd text
+git clone https://github.com/cavecomputing/dovetail.git
+cd dovetail
 scripts/install.sh            # Linux
 scripts/install-macos.sh      # macOS
 ```
 
-On Windows, in PowerShell inside the `text` folder:
+On Windows, in PowerShell inside the `dovetail` folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
@@ -75,7 +75,7 @@ On a Mac, use ⌘ instead of Ctrl. The full list is in the [guide](docs/guide.md
 
 ## Updating
 
-Run `git pull` in the `text` folder, then the same install script again. Your settings, scratchpad
+Run `git pull` in the `dovetail` folder, then the same install script again. Your settings, scratchpad
 and API key are kept.
 
 ## More

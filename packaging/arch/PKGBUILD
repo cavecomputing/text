@@ -9,7 +9,7 @@ pkgver=0.1.0.r0.g0000000
 pkgrel=1
 pkgdesc='A fast, quiet plain-text editor and scratchpad, with an assistant that suggests edits'
 arch=('x86_64' 'aarch64')
-url='https://github.com/cavecomputing/text'
+url='https://github.com/cavecomputing/dovetail'
 # The app is MIT; the bundled JetBrains Mono font is OFL-1.1.
 license=('MIT' 'OFL-1.1')
 # winit, wgpu and the keyring load these at run time (dlopen), so they don't show as linked.

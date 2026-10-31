@@ -28,12 +28,12 @@ Dovetail is built from this repository on your machine. First install what it ne
 Then, in a terminal:
 
 ```sh
-git clone https://github.com/cavecomputing/text.git
-cd text               # the repository's folder is called text
+git clone https://github.com/cavecomputing/dovetail.git
+cd dovetail           # the repository's folder is called dovetail
 scripts/install.sh    # Linux; on macOS, scripts/install-macos.sh
 ```
 
-On Windows, run the last step in PowerShell, in the `text` folder:
+On Windows, run the last step in PowerShell, in the `dovetail` folder:
 `powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1`.
 
 The first build downloads and compiles every library the app uses, so it takes a few minutes. The
@@ -57,7 +57,7 @@ and open a new terminal.
 
 ### macOS: the download
 
-Each [release](https://github.com/cavecomputing/text/releases) also has a macOS zip with
+Each [release](https://github.com/cavecomputing/dovetail/releases) also has a macOS zip with
 `Dovetail.app` in it, for Apple silicon and Intel Macs alike, so you don't need Rust. Unzip it and
 drag the app into Applications. It is signed ad hoc, not by an Apple developer account, so the
 first time you open it macOS says it can't check the app for malware: choose Done, then open
@@ -72,7 +72,7 @@ and removed like any other package. It lives in `packaging/arch/` and builds the
 GitHub:
 
 ```sh
-cd text/packaging/arch
+cd dovetail/packaging/arch
 makepkg -si           # builds, then asks to install it and any missing dependencies
 ```
 
@@ -84,7 +84,7 @@ before, delete `~/.local/bin/dovetail` and
 
 ### Updating and uninstalling
 
-To update, run `git pull` in the `text` folder, then the same install script again. Your settings,
+To update, run `git pull` in the `dovetail` folder, then the same install script again. Your settings,
 scratch and API key are kept. On Windows, close Dovetail's windows first, since Windows won't
 replace or delete a running program. On macOS, the Keychain then asks once before handing over the
 saved API key: choose Always Allow.
