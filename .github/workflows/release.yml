@@ -1,22 +1,33 @@
-# Builds the release binary on Linux, macOS and Windows when a semantic version tag (v1.2.3, or
-# v1.2.3-beta.1 for a pre-release) is pushed, and posts them on a GitHub Release named for the tag.
-# Nothing else releases: no push to main, no schedule. To release, set `version` in Cargo.toml,
-# commit, then tag that commit to match (`git tag v0.2.0 && git push origin v0.2.0`). Every name
-# comes from the binary's --print-brand, like the install scripts, so nothing is hardcoded here.
+# Builds the release binary on Linux, macOS and Windows for a semantic version tag (v1.2.3, or
+# v1.2.3-beta.1 for a pre-release) and posts them on a GitHub Release named for the tag.
+# tag.yml calls it after tagging a new Cargo.toml version pushed to main (a tag pushed by a
+# workflow starts no other workflow, so it can't rely on the push below); pushing a tag by hand
+# still works: `git tag v0.2.0 && git push origin v0.2.0`. Nothing else releases: no other push to
+# main, no schedule. Every name comes from the binary's --print-brand, like the install scripts,
+# so nothing is hardcoded here.
 name: Release
 
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
+  # The tag being released: tag.yml's when it calls, else the one pushed.
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   # The full build, test and lint on Linux, macOS and Windows (ci.yml) before anything is built,
   # since pushes to main only check Linux.
   check:
     uses: ./.github/workflows/ci.yml
+    with:
+      all_os: true
     permissions:
       contents: read
 
@@ -41,6 +52,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: |
@@ -64,8 +77,8 @@ jobs:
           binary="target/release/$package$exe"
           eval "$("$binary" --print-brand)"
           # A tag that doesn't match Cargo.toml would post binaries reporting the wrong version.
-          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
-              echo "Tag $GITHUB_REF_NAME doesn't match version $VERSION in Cargo.toml" >&2
+          if [ "$TAG" != "v$VERSION" ]; then
+              echo "Tag $TAG doesn't match version $VERSION in Cargo.toml" >&2
               exit 1
           fi
           name="$BIN_NAME-$VERSION-${{ matrix.platform }}"
@@ -103,7 +116,7 @@ jobs:
       # The notes list the commits and pull requests since the last release. A tag with a suffix
       # (v1.2.3-beta.1) is marked a pre-release, so it isn't offered as the latest.
       - run: |
-          prerelease=$([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease || true)
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease
+          prerelease=$([[ "$TAG" == *-* ]] && echo --prerelease || true)
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease
         env:
           GH_TOKEN: ${{ github.token }}

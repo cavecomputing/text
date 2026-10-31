@@ -16,6 +16,12 @@ on:
     paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
   workflow_call:
+    inputs:
+      # release.yml asks for all three OSes. A called workflow sees its caller's event, which is a
+      # push to a branch when tag.yml starts the release, so the event can't say so.
+      all_os:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,7 +29,7 @@ permissions:
 # A newer push to the same branch cancels the run still going for the older one (a manual run is
 # grouped apart, so a push doesn't cancel it).
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}-${{ inputs.all_os }}
   cancel-in-progress: true
 
 env:
@@ -35,9 +41,9 @@ jobs:
       # Let every OS finish, so one failure doesn't hide another.
       fail-fast: false
       matrix:
-        # Linux alone for a branch push or pull request; every OS for a release tag (through
+        # Linux alone for a branch push or pull request; every OS for a release (through
         # release.yml) or a manual run.
-        os: ${{ fromJSON((github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))) && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        os: ${{ fromJSON((inputs.all_os || github.event_name == 'workflow_dispatch') && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

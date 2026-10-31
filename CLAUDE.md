@@ -165,10 +165,13 @@ name from `brand.rs` through `<bin> --print-brand`:
 ### Releases
 
 Versions follow semantic versioning (`1.2.3`). Only the owner decides when to release, so never bump the
-version, push a tag or create a release unless the owner asks. A release is: set `version` in
-`Cargo.toml`, commit, then `git tag v1.2.3 && git push origin v1.2.3` on that commit. The tag runs
-[release.yml](.github/workflows/release.yml), which refuses a tag that doesn't match `Cargo.toml`
-and posts the Linux, macOS and Windows builds on a GitHub Release. The macOS one is the app bundle
+version or create a release unless the owner asks. A release is: set `version` in `Cargo.toml`,
+commit and push to `main`. [tag.yml](.github/workflows/tag.yml) sees the new version, tags the
+commit `v1.2.3` (unless that tag exists) and calls [release.yml](.github/workflows/release.yml)
+(a tag a workflow pushes starts no other workflow by itself; pushing a tag by hand still starts it).
+That runs CI on all three OSes, refuses a tag that doesn't match `Cargo.toml` and posts the Linux,
+macOS and Windows builds on a GitHub Release. Commit the matching `Cargo.lock` change with the
+bump, since the builds use `--locked`. The macOS one is the app bundle
 `scripts/install-macos.sh --bundle` makes from a universal (Apple silicon and Intel) binary,
 signed ad hoc, so Gatekeeper asks once before its first launch (docs/guide.md). A tag with a suffix (`v1.2.3-beta.1`) becomes a pre-release.
 
@@ -223,8 +226,9 @@ drawing and event wiring.
 
 ```
 .github/workflows/ci.yml build, test, clippy and fmt: Linux on every push, all three OSes by hand
-.github/workflows/release.yml  on a version tag the owner pushes: runs CI on all three OSes, builds
-                         all three, posts a Release
+.github/workflows/tag.yml  tags a new `version` pushed to main and calls release.yml
+.github/workflows/release.yml  for a version tag: runs CI on all three OSes, builds all three,
+                         posts a Release
 Cargo.toml, Cargo.lock   dependencies (see "Rust in plain terms")
 build.rs                 runs before the build: puts the icon inside the Windows .exe
 .cargo/config.toml       build flags: the Windows .exe carries its own C runtime (crt-static)
