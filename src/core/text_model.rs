@@ -9,15 +9,19 @@
 use std::ops::{Range, RangeInclusive};
 use std::time::{Duration, Instant};
 
+use serde::{Deserialize, Serialize};
+
 use crate::core::review::Suggestion;
 
 /// How many undo steps are kept; the oldest is dropped beyond this.
 const MAX_UNDO: usize = 1000;
+/// How many bytes of text the undo steps kept for the next launch may hold between them.
+const MAX_SAVED_UNDO_BYTES: usize = 1 << 20;
 /// Typing within this long of the last keystroke joins the same undo step.
 const TYPING_PAUSE: Duration = Duration::from_secs(1);
 
 /// One edit: at byte `at`, `removed` was replaced by `inserted`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Change {
     pub at: usize,
     pub removed: String,
@@ -69,6 +73,48 @@ impl TextModel {
             undo: Vec::new(),
             redo: Vec::new(),
         }
+    }
+
+    /// `text` with the undo steps saved from an earlier run (oldest first, see `history`). Steps
+    /// that don't line up with `text`, because it was edited elsewhere since, are dropped
+    /// altogether, so Ctrl+Z can never cut into the wrong place.
+    pub fn with_history(text: String, mut history: Vec<Vec<Change>>) -> TextModel {
+        history.drain(..history.len().saturating_sub(MAX_UNDO));
+        let mut model = TextModel::new(text);
+        if model.undoes_cleanly(&history) {
+            model.undo = history
+                .into_iter()
+                .map(|changes| Step {
+                    changes,
+                    typing: false,
+                    at: Instant::now(),
+                })
+                .collect();
+        }
+        model
+    }
+
+    /// The undo steps worth keeping for the next launch, oldest first: the newest ones whose
+    /// text adds up to under a megabyte (always at least the last one).
+    pub fn history(&self) -> Vec<Vec<Change>> {
+        let steps = self.undo.iter().map(|step| step.changes.clone()).collect();
+        cap_history(steps)
+    }
+
+    /// Whether undoing all of `history` from the text now, newest change first, finds each change
+    /// where it says it is.
+    fn undoes_cleanly(&self, history: &[Vec<Change>]) -> bool {
+        let mut text = self.text.clone();
+        for change in history.iter().flatten().rev() {
+            let Some(end) = change.at.checked_add(change.inserted.len()) else {
+                return false;
+            };
+            if text.get(change.at..end) != Some(change.inserted.as_str()) {
+                return false;
+            }
+            text.replace_range(change.at..end, &change.removed);
+        }
+        true
     }
 
     pub fn text(&self) -> &str {
@@ -314,6 +360,25 @@ impl TextModel {
     }
 }
 
+/// `history` without its oldest steps, until the text left in them is under a megabyte. The last
+/// step always stays, even if it alone is bigger.
+pub fn cap_history(mut history: Vec<Vec<Change>>) -> Vec<Vec<Change>> {
+    let mut bytes = 0;
+    let mut kept = 0;
+    for step in history.iter().rev() {
+        bytes += step
+            .iter()
+            .map(|change| change.removed.len() + change.inserted.len())
+            .sum::<usize>();
+        if bytes > MAX_SAVED_UNDO_BYTES && kept > 0 {
+            break;
+        }
+        kept += 1;
+    }
+    history.drain(..history.len() - kept);
+    history
+}
+
 /// The byte offset in `text` of (line, byte column), clamped to the text.
 pub fn offset(text: &str, line: usize, column: usize) -> usize {
     let line_start: usize = text.split('\n').take(line).map(|l| l.len() + 1).sum();
@@ -549,6 +614,56 @@ mod tests {
         assert_eq!(model.text(), "start");
         while !model.redo().is_empty() {}
         assert_eq!(model.text(), edited);
+    }
+
+    #[test]
+    fn saved_history_undoes_in_a_new_model_with_the_same_text() {
+        let now = Instant::now();
+        let mut model = TextModel::new("start".to_string());
+        type_at(&mut model, 5, " one", now);
+        model.replace(0..5, "begin");
+        model.indent(0..=0, 2);
+        let mut reopened = TextModel::with_history(model.text().to_string(), model.history());
+        while !reopened.undo().is_empty() {}
+        assert_eq!(reopened.text(), "start");
+    }
+
+    #[test]
+    fn history_that_doesnt_fit_the_text_is_dropped() {
+        let mut model = TextModel::new("start".to_string());
+        model.replace(0..5, "begin");
+        let history = model.history();
+        // The text was edited elsewhere since, or the saved steps are garbage.
+        for text in ["other", "", "begi"] {
+            let mut reopened = TextModel::with_history(text.to_string(), history.clone());
+            assert!(reopened.undo().is_empty(), "{text:?} kept stale history");
+        }
+        let wild = vec![vec![Change {
+            at: usize::MAX,
+            removed: String::new(),
+            inserted: "x".to_string(),
+        }]];
+        assert!(
+            TextModel::with_history("x".to_string(), wild)
+                .undo()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn saved_history_keeps_the_newest_steps_under_the_byte_cap() {
+        let step = |size: usize| {
+            vec![Change {
+                at: 0,
+                removed: String::new(),
+                inserted: "a".repeat(size),
+            }]
+        };
+        let half = MAX_SAVED_UNDO_BYTES / 2 + 1;
+        let kept = cap_history(vec![step(10), step(half), step(half)]);
+        assert_eq!(kept.len(), 1, "the oldest two went over");
+        let huge = cap_history(vec![step(10), step(MAX_SAVED_UNDO_BYTES * 2)]);
+        assert_eq!(huge.len(), 1, "the last step stays however big");
     }
 
     #[test]

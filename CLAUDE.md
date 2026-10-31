@@ -252,8 +252,8 @@ src/
     paths.rs             where config and scratch live, and where save dialogs start
     settings.rs          settings.toml: load, defaults, save
     save.rs              atomic file writes and the save-state machine (saved/saving/failed)
-    scratch.rs           the scratch space: text and cursor, resumed on launch; saving it to a
-                         file empties it, keeping the text for the next scratch window's Ctrl+Z
+    scratch.rs           the scratch space: text, cursor and undo steps, resumed on launch;
+                         saving it to a file empties it as one more undo step
     opened.rs            what a launch opens (scratch or a file): the text, the cursor, the lock,
                          and whether it's editable
     lock.rs              OS file locks so two windows never edit the same document

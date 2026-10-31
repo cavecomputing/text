@@ -191,7 +191,14 @@ impl App {
         let text = self.pane.model.text().to_string();
         let data_dir = &self.paths.data_dir;
         let view = self.scratch_view();
-        match write_doc(&self.doc, text.clone(), view, data_dir, self.disk_stamp) {
+        match write_doc(
+            &self.doc,
+            text.clone(),
+            view,
+            &[],
+            data_dir,
+            self.disk_stamp,
+        ) {
             Ok(stamp) => {
                 if stamp.is_some() {
                     self.disk_stamp = stamp;

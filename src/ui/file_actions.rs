@@ -176,9 +176,11 @@ impl App {
             Err(reason) => self.set_notice(Some(reason)),
             Ok((lock, stamp)) => {
                 self.set_notice(match self.doc {
-                    Doc::Scratch if self.editable() => clear_scratch(data_dir, text)
-                        .err()
-                        .map(|error| failure_reason(&error)),
+                    Doc::Scratch if self.editable() => {
+                        clear_scratch(data_dir, text, self.pane.model.history())
+                            .err()
+                            .map(|error| failure_reason(&error))
+                    }
                     _ => None,
                 });
                 // A rewrite saved as a new file is done: the original keeps its last save.

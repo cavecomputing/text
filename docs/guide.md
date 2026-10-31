@@ -279,6 +279,10 @@ previous match), ⌘M (minimise) and ⌘Q (closes the window, waiting for the sa
   save one, suggesting a name from the first words (ending in `.md` while scratch follows
   Markdown, so the file keeps its colours, or `.txt`): the window becomes that file and scratch is
   emptied. The next scratch window opens empty, and Ctrl+Z there brings the text back.
+- **Scratch keeps its Ctrl+Z history across restarts**: closing and reopening scratch (or saving
+  it to a file) leaves the undo steps as they were, up to the last 1000 steps or about a megabyte
+  of changed text. If `scratch.txt` was changed outside Dovetail in between, the history no
+  longer fits it and is dropped. It is kept in `scratch-undo.json` beside `scratch.txt`.
 - **Save as** (Ctrl+Shift+S) moves the text to a new file and keeps editing there, undo history and
   all. Typing that hasn't autosaved yet is written to the old file first, so the old file keeps the
   text as it was at that moment; later edits go only to the new file.

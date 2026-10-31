@@ -10,10 +10,11 @@ use crate::core::paths::Paths;
 use crate::core::recent::{remember, same_file};
 use crate::core::save::{atomic_write, check_writable, failure_reason};
 use crate::core::scratch::{
-    ScratchState, ScratchView, claim_scratch, scratch_lock_path, scratch_open_elsewhere,
-    scratch_text_path, take_cleared,
+    ScratchState, ScratchView, claim_scratch, load_history, save_history, scratch_lock_path,
+    scratch_open_elsewhere, scratch_text_path,
 };
 use crate::core::text_file::{DiskStamp, LineEnding, read_text, save_text};
+use crate::core::text_model::Change;
 
 /// What a window is showing.
 #[derive(Debug, Clone)]
@@ -62,9 +63,8 @@ pub struct OpenedDoc {
     pub lock: Option<Lock>,
     /// The file on disk as it was read, so a save can tell if someone else changed it.
     pub disk_stamp: Option<DiskStamp>,
-    /// What scratch held before Save to a file emptied it, for the window to offer as its first
-    /// undo step.
-    pub cleared_scratch: Option<String>,
+    /// Scratch's undo steps from the last run, oldest first.
+    pub history: Vec<Vec<Change>>,
 }
 
 /// Opens `doc`: claims it so no second window edits it, reads it, and decides whether it can be
@@ -78,7 +78,7 @@ pub fn open_doc(doc: Doc, paths: &Paths) -> OpenedDoc {
         read_only_reason: None,
         lock: None,
         disk_stamp: None,
-        cleared_scratch: None,
+        history: Vec::new(),
     };
     match doc {
         Doc::Scratch => {
@@ -88,6 +88,7 @@ pub fn open_doc(doc: Doc, paths: &Paths) -> OpenedDoc {
                     opened.text = scratch.text.clone();
                     opened.cursor = Some(scratch.cursor());
                     opened.scroll_line = scratch.view.scroll_line;
+                    opened.history = load_history(&paths.data_dir);
                 }
                 Err(error) => {
                     opened.read_only_reason = Some(format!("Couldn't read scratch: {error}"));
@@ -99,14 +100,7 @@ pub fn open_doc(doc: Doc, paths: &Paths) -> OpenedDoc {
                 }
                 // Without a lock file there is nothing to guard with, so carry on.
                 Err(TryLockError::Error(_)) => {}
-                Ok(lock) => {
-                    opened.lock = Some(lock);
-                    // Only into a scratch that opened, or it would be lost (`open_in_place`
-                    // refuses a scratch it can't read).
-                    if opened.read_only_reason.is_none() {
-                        opened.cleared_scratch = take_cleared(&paths.data_dir);
-                    }
-                }
+                Ok(lock) => opened.lock = Some(lock),
             }
         }
         Doc::File { path, .. } => {
@@ -254,17 +248,21 @@ fn writable_reason(path: &Path) -> Option<String> {
     }
 }
 
-/// Writes `text` as `doc`'s (with `view`, scratch's cursor, for scratch), as of the file on disk
+/// Writes `text` as `doc`'s (with `view`, scratch's cursor, and `history`, its undo steps, for scratch), as of the file on disk
 /// at `disk_stamp`. Returns the file as written, or the reason it failed.
 pub fn write_doc(
     doc: &Doc,
     text: String,
     view: ScratchView,
+    history: &[Vec<Change>],
     data_dir: &Path,
     disk_stamp: Option<DiskStamp>,
 ) -> Result<Option<DiskStamp>, String> {
     let result = match doc {
-        Doc::Scratch => ScratchState { text, view }.save(data_dir).map(|_| None),
+        Doc::Scratch => ScratchState { text, view }
+            .save(data_dir)
+            .and_then(|()| save_history(data_dir, history))
+            .map(|()| None),
         Doc::File {
             path,
             line_ending,
@@ -586,29 +584,23 @@ mod tests {
     }
 
     #[test]
-    fn a_scratch_that_cant_be_read_keeps_its_cleared_text() {
+    fn scratch_opens_with_the_undo_steps_it_was_left_with() {
         let dir = tempfile::tempdir().unwrap();
         let paths = Paths::under(dir.path());
-        crate::core::scratch::clear_scratch(&paths.data_dir, "old").unwrap();
-        let scratch_file = scratch_text_path(&paths.data_dir);
-        fs::write(&scratch_file, [0xff, 0xfe]).unwrap();
-        let file_window = file_doc(&dir.path().join("notes.txt"));
-        let refused = open_in_place(&file_window, Doc::Scratch, &paths);
-        assert!(refused.unwrap_err().starts_with("Couldn't read scratch"));
-        fs::write(&scratch_file, "").unwrap();
-        let opened = open_doc(Doc::Scratch, &paths);
-        assert_eq!(opened.cleared_scratch.as_deref(), Some("old"));
-    }
-
-    #[test]
-    fn scratch_offers_its_cleared_text_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let paths = Paths::under(dir.path());
-        crate::core::scratch::clear_scratch(&paths.data_dir, "old").unwrap();
-        let first = open_doc(Doc::Scratch, &paths);
-        assert_eq!(first.text, "");
-        assert_eq!(first.cleared_scratch.as_deref(), Some("old"));
-        drop(first);
-        assert_eq!(open_doc(Doc::Scratch, &paths).cleared_scratch, None);
+        let history = vec![vec![Change {
+            at: 0,
+            removed: String::new(),
+            inserted: "hi".to_string(),
+        }]];
+        write_doc(
+            &Doc::Scratch,
+            "hi".to_string(),
+            ScratchView::default(),
+            &history,
+            &paths.data_dir,
+            None,
+        )
+        .unwrap();
+        assert_eq!(open_doc(Doc::Scratch, &paths).history, history);
     }
 }

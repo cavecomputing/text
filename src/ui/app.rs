@@ -24,6 +24,7 @@ use crate::core::shutdown::{self, Unsaved};
 use crate::core::ssh::{complete_keyword, host_block};
 use crate::core::syntax::Syntax;
 use crate::core::text_file::{DiskStamp, changed_on_disk, read_text};
+use crate::core::text_model::{Change, TextModel};
 use crate::core::typing::is_code;
 use crate::ui::assistant_actions::{Assistant, AssistantAction, CardState};
 use crate::ui::editor::{Decision, EDITOR_ID, ORIGINAL_ID, Pane};
@@ -972,10 +973,11 @@ impl App {
         let text = self.pane.model.text().to_string();
         let data_dir = self.paths.data_dir.clone();
         let view = self.scratch_view();
+        let history = self.scratch_history();
         let (doc, disk_stamp) = self.saved_to();
         let document = self.document;
         Task::perform(
-            async move { write_doc(&doc, text, view, &data_dir, disk_stamp) },
+            async move { write_doc(&doc, text, view, &history, &data_dir, disk_stamp) },
             move |result| Message::Saved(document, generation, result),
         )
     }
@@ -987,7 +989,8 @@ impl App {
         let text = self.pane.model.text().to_string();
         let view = self.scratch_view();
         let (doc, disk_stamp) = self.saved_to();
-        let result = write_doc(&doc, text, view, &self.paths.data_dir, disk_stamp);
+        let history = self.scratch_history();
+        let result = write_doc(&doc, text, view, &history, &self.paths.data_dir, disk_stamp);
         let written = result.is_ok();
         let _ = self.update(Message::Saved(self.document, generation, result));
         written
@@ -1032,6 +1035,7 @@ impl App {
             doc,
             text: self.pane.model.text().to_string(),
             view: self.scratch_view(),
+            history: self.scratch_history(),
             data_dir: self.paths.data_dir.clone(),
             disk_stamp,
         });
@@ -1043,6 +1047,14 @@ impl App {
         match (&self.original, self.doc.path()) {
             (Some(_), Some(path)) => (Doc::file(draft_path(&self.paths.data_dir, path)), None),
             _ => (self.doc.clone(), self.disk_stamp),
+        }
+    }
+
+    /// Scratch's undo steps, to save beside its text; a file keeps none.
+    fn scratch_history(&self) -> Vec<Vec<Change>> {
+        match self.doc {
+            Doc::Scratch => self.pane.model.history(),
+            Doc::File { .. } => Vec::new(),
         }
     }
 
@@ -1212,13 +1224,11 @@ impl App {
     }
 }
 
-/// The editor for `opened`: its text, cursor and view. Scratch emptied by Save to a file opens
-/// empty, with Ctrl+Z bringing the old text back.
+/// The editor for `opened`: its text, cursor, view and, for scratch, the undo steps it was left
+/// with.
 fn pane_for(opened: &OpenedDoc) -> Pane {
-    let mut pane = Pane::new(opened.cleared_scratch.as_deref().unwrap_or(&opened.text));
-    if let Some(cleared) = &opened.cleared_scratch {
-        pane.replace(0..cleared.len(), &opened.text);
-    }
+    let mut pane = Pane::new(&opened.text);
+    pane.model = TextModel::with_history(opened.text.clone(), opened.history.clone());
     if let Some((line, column)) = opened.cursor {
         pane.content.move_to(Cursor {
             position: Position { line, column },
@@ -1606,6 +1616,28 @@ mod tests {
         assert!(matches!(&app.doc, Doc::File { path, .. } if *path == saved));
         assert_eq!(std::fs::read_to_string(&saved).unwrap(), "a");
         assert_eq!(ScratchState::load(&paths.data_dir).unwrap().text, "");
+    }
+
+    #[test]
+    fn a_new_scratch_window_can_undo_what_the_last_one_typed() {
+        let (_dir, paths, mut app, _notes) = scratch_window("typed");
+        // Enter ends the typing step, so undo takes back only the line break.
+        let _ = app.update(Message::NewLine { shift: false });
+        assert!(app.save_before_leaving());
+        let mut pane = pane_for(&open_doc(Doc::Scratch, &paths));
+        assert_eq!(pane.model.text(), "typed\n");
+        assert!(pane.undo());
+        assert_eq!(pane.model.text(), "typed");
+    }
+
+    #[test]
+    fn saving_scratch_to_a_file_leaves_scratch_empty_with_its_text_one_undo_away() {
+        let (dir, paths, mut app, _notes) = scratch_window("typed");
+        let _ = app.update(Message::SaveAsPicked(0, dir.path().join("saved.txt")));
+        let mut pane = pane_for(&open_doc(Doc::Scratch, &paths));
+        assert_eq!(pane.model.text(), "");
+        assert!(pane.undo());
+        assert_eq!(pane.model.text(), "typed");
     }
 
     #[test]

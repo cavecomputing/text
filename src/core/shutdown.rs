@@ -9,12 +9,15 @@ use std::sync::Mutex;
 use crate::core::opened::{Doc, write_doc};
 use crate::core::scratch::ScratchView;
 use crate::core::text_file::DiskStamp;
+use crate::core::text_model::Change;
 
 /// Text the window has that its document on disk doesn't, with what writing it needs.
 pub struct Unsaved {
     pub doc: Doc,
     pub text: String,
     pub view: ScratchView,
+    /// Scratch's undo steps; none for a file.
+    pub history: Vec<Vec<Change>>,
     pub data_dir: PathBuf,
     pub disk_stamp: Option<DiskStamp>,
 }
@@ -47,6 +50,7 @@ pub fn write_unsaved() {
             &unsaved.doc,
             unsaved.text,
             unsaved.view,
+            &unsaved.history,
             &unsaved.data_dir,
             unsaved.disk_stamp,
         );
